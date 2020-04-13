@@ -2,6 +2,7 @@ use crate::database;
 
 mod add_new_user;
 
+#[derive(Clone)]
 pub struct Controller {
     pub db: database::UserCollection,
 }

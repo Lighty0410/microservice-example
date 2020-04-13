@@ -8,16 +8,26 @@ mod model;
 mod server;
 use controller::Controller;
 
+type RequestBody = Request<Body>;
+
 #[tokio::main]
 async fn main() {
+    let user_collection = database::UserCollection::new();
+    let controller = controller::Controller::new(user_collection);
+    let router = server::Router::new(controller);
+
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    let make_svc = make_service_fn(|_conn| async {
-        // service_fn converts our function into a `Service`
-        Ok::<_, String>(service_fn(server::new_server))
+    let make_svc = make_service_fn(move |_conn| {
+        let router = router.clone();
+        async move {
+            Ok::<_, String>(service_fn(move |req: RequestBody| {
+                let router = router.clone();
+                async move { Ok::<_, String>(router.new_server(req).await?) }
+            }))
+        }
     });
     let server = Server::bind(&addr).serve(make_svc);
 
-    // Run this server for... forever!
     if let Err(e) = server.await {
         eprintln!("server error: {}", e);
     }

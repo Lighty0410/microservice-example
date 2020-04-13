@@ -2,6 +2,7 @@ use crate::model::User;
 use mongodb::{options::ClientOptions, Client, Collection};
 mod add_new_user;
 
+#[derive(Clone)]
 pub struct UserCollection(Collection);
 
 impl UserCollection {
