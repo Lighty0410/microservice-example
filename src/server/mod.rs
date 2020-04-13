@@ -1,14 +1,13 @@
 mod login;
 mod user_router;
-use hyper::{Body, HeaderMap, Method, Request, Response, Server, StatusCode};
+use hyper::{Body, Method, Request, Response};
 mod utils;
 use crate::controller::Controller;
-use crate::database;
+use std::convert::Infallible;
 
 type RequestBody = Request<Body>;
-type ResponseBody = Result<Response<Body>, String>;
+type ResponseBody = Result<Response<Body>, Infallible>;
 
-#[derive(Clone)]
 pub struct Router {
     controller: Controller,
 }
@@ -20,11 +19,11 @@ impl Router {
 }
 
 impl Router {
-    pub async fn new_server(&self, req: Request<Body>) -> ResponseBody {
-        let mut response = Response::new(Body::empty());
+    pub async fn new_server(&mut self, req: Request<Body>) -> ResponseBody {
+        let mut response = Response::new(Body::from("unknown endpoint"));
         match (req.method(), req.uri().path()) {
-            (&Method::GET, "/login") | (&Method::POST, "/create-user") => {
-                self.user_router(req).await
+            (&Method::POST, "/login") | (&Method::POST, "/create-user") => {
+                Ok(self.user_router(req).await)
             }
             _ => Ok(response),
         }

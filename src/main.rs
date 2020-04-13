@@ -1,28 +1,36 @@
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Request, Response, Server};
-use hyper::{HeaderMap, Method, StatusCode};
+use hyper::{Body, Request, Server};
 use std::net::SocketAddr;
 mod controller;
 mod database;
 mod model;
 mod server;
+mod utils;
 use controller::Controller;
+use server::Router;
+use std::convert::Infallible;
 
 type RequestBody = Request<Body>;
 
 #[tokio::main]
 async fn main() {
-    let user_collection = database::UserCollection::new();
-    let controller = controller::Controller::new(user_collection);
-    let router = server::Router::new(controller);
+    let mongo_db = database::build_mongo();
+    let redis_conn = database::build_redis();
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let make_svc = make_service_fn(move |_conn| {
-        let router = router.clone();
+        let mongo_db = mongo_db.clone();
+        let redis_conn = redis_conn.clone();
+
         async move {
             Ok::<_, String>(service_fn(move |req: RequestBody| {
-                let router = router.clone();
-                async move { Ok::<_, String>(router.new_server(req).await?) }
+                let mongo_db = mongo_db.clone();
+                let redis_conn = redis_conn.clone();
+
+                let controller = Controller::new(mongo_db, redis_conn);
+                let mut router = Router::new(controller);
+
+                async move { Ok::<_, Infallible>(router.new_server(req).await?) }
             }))
         }
     });
