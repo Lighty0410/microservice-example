@@ -1,1 +1,1 @@
-# streaming-service
+# microservice example
