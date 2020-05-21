@@ -1,21 +1,25 @@
-mod add_new_user;
-mod get_user_password;
-
+mod user;
 use mongodb::Client;
 
+#[derive(Debug, Clone)]
 pub struct UserDB {
     mongo_collection: mongodb::Collection,
-    redis_connection: redis::Connection,
+    redis_client: redis::Client,
 }
 
 impl UserDB {
     pub fn new(mongo_collection: mongodb::Collection, redis_client: redis::Client) -> Self {
-        let redis_connection = redis_client.get_connection().unwrap();
-
         UserDB {
             mongo_collection,
-            redis_connection,
+            redis_client,
         }
+    }
+
+    pub fn new_default() -> Self {
+        let mongo_collection = build_mongo();
+        let redis_client = build_redis();
+
+        UserDB::new(mongo_collection, redis_client)
     }
 }
 

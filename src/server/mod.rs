@@ -1,13 +1,13 @@
-mod login;
+mod json_response;
 mod user_router;
-use hyper::{Body, Method, Request, Response};
-mod utils;
 use crate::controller::Controller;
+use hyper::{Body, Request, Response};
 use std::convert::Infallible;
 
 type RequestBody = Request<Body>;
 type ResponseBody = Result<Response<Body>, Infallible>;
 
+#[derive(Debug, Clone)]
 pub struct Router {
     controller: Controller,
 }
@@ -20,12 +20,6 @@ impl Router {
 
 impl Router {
     pub async fn new_server(&mut self, req: Request<Body>) -> ResponseBody {
-        let mut response = Response::new(Body::from("unknown endpoint"));
-        match (req.method(), req.uri().path()) {
-            (&Method::POST, "/login") | (&Method::POST, "/create-user") => {
-                Ok(self.user_router(req).await)
-            }
-            _ => Ok(response),
-        }
+        Ok(self.user_router(req).await)
     }
 }

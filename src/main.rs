@@ -6,6 +6,7 @@ mod database;
 mod model;
 mod server;
 mod utils;
+use crate::database::UserDB;
 use controller::Controller;
 use server::Router;
 use std::convert::Infallible;
@@ -14,22 +15,18 @@ type RequestBody = Request<Body>;
 
 #[tokio::main]
 async fn main() {
-    let mongo_db = database::build_mongo();
-    let redis_conn = database::build_redis();
+    let user_db = UserDB::new_default();
+    let controller = Controller::new(user_db);
+    let router = &Router::new(controller);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    let make_svc = make_service_fn(move |_conn| {
-        let mongo_db = mongo_db.clone();
-        let redis_conn = redis_conn.clone();
 
-        async move {
+    let make_svc = make_service_fn(|_conn| {
+        let router = router.clone();
+
+        async {
             Ok::<_, String>(service_fn(move |req: RequestBody| {
-                let mongo_db = mongo_db.clone();
-                let redis_conn = redis_conn.clone();
-
-                let controller = Controller::new(mongo_db, redis_conn);
-                let mut router = Router::new(controller);
-
+                let mut router = router.clone();
                 async move { Ok::<_, Infallible>(router.new_server(req).await?) }
             }))
         }
