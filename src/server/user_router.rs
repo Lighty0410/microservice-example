@@ -1,15 +1,15 @@
-use crate::model::{GenericError, GenericSuccess, User, UserLogin, UserResponse};
+use crate::model::{GenericSuccess, User, UserLogin, UserResponse};
 use crate::server::{json_response::JSON, RequestBody, Router};
 use crate::utils;
+use anyhow::anyhow;
 use hyper::header::{COOKIE, SET_COOKIE};
 use hyper::StatusCode;
 use hyper::{Body, HeaderMap, Method, Response};
-use reqwest::header::HeaderName;
-use std::borrow::Borrow;
+
+type ResponseBody = anyhow::Result<Response<Body>>;
 
 impl Router {
-    pub(super) async fn user_router(&mut self, req: RequestBody) -> Response<Body> {
-        // println!("Icnomming request {} {}", req.method(), req.uri().path());
+    pub(super) async fn user_router(&mut self, req: RequestBody) -> ResponseBody {
         match (req.method(), req.uri().path()) {
             (&Method::POST, "/create-user") => self.create_user(req).await,
 
@@ -17,129 +17,94 @@ impl Router {
 
             (&Method::POST, "/user") => self.get_user(req).await,
 
-            _ => JSON::response(
-                Some(GenericError {
-                    reason: "unknown endpoint".into(),
-                    caused: "wrong redirection".into(),
-                }),
-                None,
-                None,
-            ),
+            _ => Err(anyhow!("wrong endpoint")),
         }
     }
 
-    pub(super) async fn create_user(&mut self, req: RequestBody) -> Response<Body> {
-        let user: User = match utils::parse_body(req, &mut Vec::<u8>::new()).await {
-            Ok(val) => val,
-            Err(e) => return JSON::error_parse_body(e),
-        };
+    async fn create_user(&mut self, req: RequestBody) -> ResponseBody {
+        let user: User = utils::parse_body(req, &mut Vec::<u8>::new()).await?;
 
-        self.controller.create_user(user); // TODO: remove unwrap from mongo and handle the error correctly.
+        self.controller.create_user(user)?;
 
-        JSON::response(
+        Ok(JSON::response(
             Some(GenericSuccess {
                 result: "user created successfully!".into(),
             }),
             None,
             Some(StatusCode::CREATED),
-        )
+        ))
     }
-
-    pub(super) async fn login_user(&mut self, req: RequestBody) -> Response<Body> {
-        if self.get_user_by_token(&req).status().is_success() {
+    //
+    async fn login_user(&mut self, req: RequestBody) -> ResponseBody {
+        if self.get_user_by_token(&req)?.status().is_success() {
             let mut headers = HeaderMap::new();
-            if let Some(token) = Router::token_header_from_cookie(req.headers()) {
-                headers.insert(SET_COOKIE, ["token =", token].concat().parse().unwrap());
+            if let Some(token) = Self::token_header_from_cookie(req.headers()) {
+                headers.insert(SET_COOKIE, ["token =", token].concat().parse()?);
             }
 
-            return JSON::response(
+            return Ok(JSON::response(
                 Some(GenericSuccess {
-                    result: "already logged!".into(),
+                    result: "already logged in!".into(),
                 }),
                 Some(headers),
                 Some(StatusCode::OK),
-            );
+            ));
         }
 
-        let login_info: UserLogin = match utils::parse_body(req, &mut Vec::<u8>::new()).await {
-            Ok(val) => val,
-            Err(e) => return JSON::error_parse_body(e),
-        };
+        let login_info: UserLogin = utils::parse_body(req, &mut Vec::<u8>::new()).await?;
+        let is_logged_in = self.controller.check_password_create_hash(login_info)?;
 
-        let is_logged_in = self.controller.check_password_create_hash(login_info);
-        match is_logged_in {
-            Ok(token) => {
-                let mut headers = HeaderMap::new();
-                headers.insert(
-                    SET_COOKIE,
-                    ["token =", token.as_str()].concat().parse().unwrap(),
-                );
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            SET_COOKIE,
+            ["token =", is_logged_in.as_str()].concat().parse()?,
+        );
 
-                JSON::response(
-                    Some(GenericSuccess {
-                        result: "logged in successfully!".into(),
-                    }),
-                    Some(headers),
-                    Some(StatusCode::OK),
-                )
-            }
-            Err(e) => JSON::response(
-                Some(GenericError {
-                    reason: "Cannot log in".into(),
-                    caused: e,
-                }),
-                None,
-                Some(StatusCode::BAD_REQUEST),
-            ),
-        }
+        Ok(JSON::response(
+            Some(GenericSuccess {
+                result: "logged in successfully!".into(),
+            }),
+            Some(headers),
+            Some(StatusCode::OK),
+        ))
     }
 
-    pub(super) async fn get_user(&mut self, req: RequestBody) -> Response<Body> {
+    async fn get_user(&mut self, req: RequestBody) -> ResponseBody {
         self.get_user_by_token(&req)
     }
 
-    fn get_user_by_token(&mut self, req: &RequestBody) -> Response<Body> {
-        let mut get_user_by_token_clos = |token: &str| -> Response<Body> {
-            let user_resp = self.controller.get_user_by_token(token.borrow());
-            match user_resp {
-                Ok(user) => {
-                    let mut headers = HeaderMap::new();
-                    headers.insert(SET_COOKIE, ["token =", token].concat().parse().unwrap());
-                    let user_response: UserResponse = user.into();
-                    JSON::response(Some(user_response), Some(headers), Some(StatusCode::OK))
-                }
-                Err(e) => JSON::response(
-                    Some(GenericError {
-                        reason: "Cannot log in".into(),
-                        caused: e,
-                    }),
-                    None,
-                    Some(StatusCode::BAD_REQUEST),
-                ),
-            }
+    fn get_user_by_token(&mut self, req: &RequestBody) -> ResponseBody {
+        let mut get_user_by_token_clos = |token: &str| -> ResponseBody {
+            let user_resp = self.controller.get_user_by_token(token)?;
+
+            let mut headers = HeaderMap::new();
+            headers.insert(SET_COOKIE, ["token =", token].concat().parse()?);
+
+            let user_response: UserResponse = user_resp.into();
+
+            Ok(JSON::response(
+                Some(user_response),
+                Some(headers),
+                Some(StatusCode::OK),
+            ))
         };
-        let token_from_cookie = Router::token_header_from_cookie(req.headers());
+
+        let token_from_cookie = Self::token_header_from_cookie(req.headers());
         let token_from_header = req.headers().get("token");
+
         match (token_from_cookie, token_from_header) {
             (Some(token), _) => get_user_by_token_clos(token),
-            (_, Some(token)) => get_user_by_token_clos(token.to_str().unwrap()),
-            _ => JSON::response(
-                Some(GenericError {
-                    reason: "token wasn't found".into(),
-                    caused: "token".to_string(),
-                }),
-                None,
-                Some(StatusCode::BAD_REQUEST),
-            ),
+            (_, Some(token)) => get_user_by_token_clos(token.to_str()?),
+            _ => Err(anyhow!("wrong endpoint")),
         }
     }
-
+    //
     fn token_header_from_cookie(headers: &HeaderMap) -> Option<&str> {
         Option::from(
             headers
                 .get(COOKIE)?
                 .to_str()
-                .unwrap()
+                .ok()?
                 .trim_start_matches("token="),
         )
     }

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use std::str;
@@ -7,15 +8,12 @@ pub(super) fn encode_string_base64(password: &mut String) {
     *password = base64::encode(for_encode)
 }
 
-pub(super) fn decode_string_base64(password: &str) -> Result<String, String> {
-    let decoded =
-        base64::decode(password).or_else(|err| Err(format!("cannot decode password :{}", err)))?;
+pub(super) fn decode_string_base64(password: &str) -> Result<String> {
+    let decoded = base64::decode(password)?;
 
-    let password = str::from_utf8(&decoded)
-        .or_else(|err| Err(format!("cannot decode password from vec[u8] :{}", err)))?
-        .to_string();
+    let password = str::from_utf8(&decoded)?;
 
-    Ok(password)
+    Ok(password.to_string())
 }
 
 pub(super) fn generate_token() -> String {

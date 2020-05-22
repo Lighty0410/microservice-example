@@ -1,10 +1,18 @@
-mod user;
 use mongodb::Client;
+use thiserror::Error;
+
+mod user;
 
 #[derive(Debug, Clone)]
 pub struct UserDB {
     mongo_collection: mongodb::Collection,
     redis_client: redis::Client,
+}
+
+#[derive(Debug, Error)]
+enum DatabaseError {
+    #[error("cannot find user in the database")]
+    CannotFindUser,
 }
 
 impl UserDB {
