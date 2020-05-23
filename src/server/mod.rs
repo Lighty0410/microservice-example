@@ -1,4 +1,5 @@
 mod json_response;
+mod macros;
 mod user_router;
 use crate::controller::Controller;
 use crate::model::GenericError;

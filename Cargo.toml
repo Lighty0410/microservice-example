@@ -1,5 +1,5 @@
 [package]
-name = "for_testing"
+name = "auth_microservice"
 version = "0.1.0"
 authors = ["lighty"]
 edition = "2018"

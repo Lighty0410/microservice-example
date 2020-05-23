@@ -1,10 +1,11 @@
 use crate::model::{GenericSuccess, User, UserLogin, UserResponse};
 use crate::server::{json_response::JSON, RequestBody, ResponseBody, Router, ServerErrors};
 use crate::utils;
+use crate::Err;
 use anyhow::anyhow;
 use hyper::header::{COOKIE, SET_COOKIE};
-use hyper::StatusCode;
-use hyper::{Body, HeaderMap, Method, Response};
+use hyper::{HeaderMap, Method, StatusCode};
+use std::result::Result::Err;
 
 impl Router {
     pub(super) async fn user_router(&mut self, req: RequestBody) -> ResponseBody {
@@ -15,7 +16,7 @@ impl Router {
 
             (&Method::POST, "/user") => self.get_user(req).await,
 
-            _ => Err(anyhow!(ServerErrors::PathNotFound)),
+            _ => Err!(ServerErrors::PathNotFound),
         }
     }
 
