@@ -2,20 +2,20 @@ use super::utils as local_utils;
 use super::Controller;
 use crate::model::User;
 use crate::model::UserLogin;
-use std::borrow::Borrow;
+use anyhow::{anyhow, Result};
 
 impl Controller {
-    pub fn create_user(&mut self, mut user: User) {
+    pub fn create_user(&mut self, mut user: User) -> Result<()> {
         local_utils::encode_string_base64(&mut user.password);
-        self.db.create_user_mongo(user);
+        self.db.create_user_mongo(user)
     }
 
-    pub fn check_password_create_hash(&mut self, user_login: UserLogin) -> Result<String, String> {
+    pub fn check_password_create_hash(&mut self, user_login: UserLogin) -> Result<String> {
         let user = self.db.get_user_by_username_mongo(&user_login.username)?;
         let decoded_password = local_utils::decode_string_base64(&user.password)?;
 
         if user_login.password != decoded_password {
-            return Err("incorrect password".into());
+            return Err(anyhow!("incorrect password"));
         }
 
         let token = local_utils::generate_token();
@@ -23,7 +23,7 @@ impl Controller {
         Ok(token)
     }
 
-    pub fn get_user_by_token(&mut self, token: &str) -> Result<User, String> {
-        self.db.get_user_by_token(token.borrow())
+    pub fn get_user_by_token(&mut self, token: &str) -> Result<User> {
+        self.db.get_user_by_token(token)
     }
 }

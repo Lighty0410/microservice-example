@@ -1,5 +1,6 @@
 use crate::model::GenericError;
 use crate::utils::struct_to_json;
+use anyhow::Error;
 use hyper::header::{HeaderValue, CONTENT_TYPE};
 use hyper::StatusCode;
 use hyper::{Body, HeaderMap, Response};
@@ -23,9 +24,7 @@ impl JSON {
                     *response.body_mut() = Body::from(body);
                 }
                 Err(e) => {
-                    *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                    println!("cannot encode JSON: {}", e);
-                    return response;
+                    return Self::error_parse_body(e);
                 }
             };
         }
@@ -48,10 +47,10 @@ impl JSON {
         response
     }
 
-    pub(super) fn error_parse_body(e: String) -> Response<Body> {
+    pub(super) fn error_parse_body(e: Error) -> Response<Body> {
         let json_body = GenericError {
             reason: "incorrect body".into(),
-            caused: e,
+            caused: e.to_string(),
         };
         let status_code = StatusCode::BAD_REQUEST;
 
