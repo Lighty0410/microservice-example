@@ -1,12 +1,10 @@
 use crate::model::{GenericSuccess, User, UserLogin, UserResponse};
-use crate::server::{json_response::JSON, RequestBody, Router};
+use crate::server::{json_response::JSON, RequestBody, ResponseBody, Router, ServerErrors};
 use crate::utils;
 use anyhow::anyhow;
 use hyper::header::{COOKIE, SET_COOKIE};
 use hyper::StatusCode;
 use hyper::{Body, HeaderMap, Method, Response};
-
-type ResponseBody = anyhow::Result<Response<Body>>;
 
 impl Router {
     pub(super) async fn user_router(&mut self, req: RequestBody) -> ResponseBody {
@@ -17,7 +15,7 @@ impl Router {
 
             (&Method::POST, "/user") => self.get_user(req).await,
 
-            _ => Err(anyhow!("wrong endpoint")),
+            _ => Err(anyhow!(ServerErrors::PathNotFound)),
         }
     }
 
@@ -98,7 +96,7 @@ impl Router {
             _ => Err(anyhow!("wrong endpoint")),
         }
     }
-    //
+
     fn token_header_from_cookie(headers: &HeaderMap) -> Option<&str> {
         Option::from(
             headers
